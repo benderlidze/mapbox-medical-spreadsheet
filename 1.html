@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <script src="https://api.mapbox.com/mapbox-gl-js/v1.9.1/mapbox-gl.js"></script>
+    <link href="https://api.mapbox.com/mapbox-gl-js/v1.9.1/mapbox-gl.css" rel="stylesheet" />
+    <script src="https://cdn.jsdelivr.net/npm/@turf/turf@5/turf.min.js"></script>
+    <script src="https://d3js.org/d3.v5.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Open+Sans&display=swap" rel="stylesheet">
+
+    <style>
+        * {
+            padding: 0;
+            margin: 0;
+        }
+
+        #map {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 100%;
+            font-family: 'Open Sans', sans-serif !important;
+        }
+
+        html,
+        body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            font-family: 'Open Sans', sans-serif !important;
+        }
+
+        .filter-group {
+            font-weight: 600;
+            position: absolute;
+            top: 50px;
+            left: 10px;
+            z-index: 1;
+            border-radius: 3px;
+
+            color: #fff;
+        }
+
+        .filter-group input[type='checkbox']:first-child+label {
+            border-radius: 3px 3px 0 0;
+        }
+
+        .filter-group label:last-child {
+            border-radius: 0 0 3px 3px;
+            border: none;
+        }
+
+        .filter-group input[type='checkbox'] {
+            display: none;
+        }
+
+        .filter-group input[type='checkbox']+label {
+            background-color: #3386c0;
+            display: block;
+            cursor: pointer;
+            padding: 10px;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.25);
+        }
+
+        .filter-group input[type='checkbox']+label {
+            background-color: #3386c0;
+            text-transform: capitalize;
+        }
+
+        .filter-group input[type='checkbox']+label:hover,
+        .filter-group input[type='checkbox']:checked+label {
+            background-color: #4ea0da;
+        }
+
+        .filter-group input[type='checkbox']:checked+label:before {
+            content: '✔';
+            margin-right: 5px;
+        }
+
+        .descr {
+            padding: 20px 0px;
+        }
+
+        .gmap {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+        }
+
+        .controls {
+            padding: 5px;
+        }
+
+        .accordion {
+            background-color: #eee;
+            color: #444;
+            cursor: pointer;
+            padding: 18px;
+            width: 100%;
+            border: none;
+            text-align: left;
+            outline: none;
+            font-size: 15px;
+            transition: 0.4s;
+        }
+
+        .active,
+        .accordion:hover {
+            background-color: #ccc;
+        }
+
+        .accordion:after {
+            content: '\002B';
+            color: #777;
+            font-weight: bold;
+            float: right;
+            margin-left: 5px;
+        }
+
+        .active:after {
+            content: "\2212";
+        }
+
+        .panel {
+            padding: 0 18px;
+            background-color: white;
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.2s ease-out;
+        }
+
+        .item {
+            padding: 10px;
+            cursor: pointer;
+        }
+
+        .item:hover {
+            background-color: #ccc;
+        }
+
+
+
+
+
+
+
+        .sidenav {
+            height: 100%;
+            width: 0;
+            position: fixed;
+            z-index: 1;
+            top: 0;
+            left: 0;
+            background-color: #eee;
+            overflow-x: hidden;
+            transition: 0.5s;
+            padding-top: 60px;
+        }
+
+        .sidenav a {
+            padding: 8px 8px 8px 32px;
+            text-decoration: none;
+            font-size: 25px;
+            color: #818181;
+            display: block;
+            transition: 0.3s;
+        }
+
+        .sidenav a:hover {
+            color: #f1f1f1;
+        }
+
+        .sidenav .closebtn {
+            position: absolute;
+            top: 0;
+            right: 25px;
+            font-size: 36px;
+            margin-left: 50px;
+        }
+
+        @media screen and (max-height: 450px) {
+            .sidenav {
+                padding-top: 15px;
+            }
+
+            .sidenav a {
+                font-size: 18px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div id="map"></div>
+    <nav id="filter-group" class="filter-group"></nav>
+
+    <!--
+    <div class="gmap">
+        <input id="pac-input" class="controls" type="text" placeholder="Enter a location">
+        <span id="zoom"></span>
+        <div style="font-size:30px;cursor:pointer;margin-top:10px;" onclick="openNav()">Filters</div>
+    </div>
+-->
+
+
+    <div id="mySidenav" class="sidenav">
+        <a href="javascript:void(0)" class="closebtn" onclick="closeNav()">&times;</a>
+        <div id="acc" style="width:300px; overflow-y:auto; max-height: 90vh;"></div>
+    </div>
+
+
+    <script>
+        function openNav() {
+            document.getElementById("mySidenav").style.width = "300px";
+        }
+
+        function closeNav() {
+            document.getElementById("mySidenav").style.width = "0";
+        }
+    </script>
+
+
+    <script>
+
+
+        var accrd = document.getElementById('acc');
+        var filterGroup = document.getElementById('filter-group');
+        var zoom = document.getElementById('zoom');
+        const categories = [];
+        const sData = {};
+        let dataReady = false;
+        let mapReady = false;
+        const pinsData = [];
+        const filtersDiv = document.querySelector("#filters");
+        const toggleButton = document.querySelector("#toggle");
+
+        const icons = [
+            { name: 'Medical Centre', url: 'icons/icon1.png' },
+            { name: 'Medical Clinic', url: 'icons/icon2.png' },
+            { name: 'Medical Clinic2', url: 'icons/icon2.png' },
+            { name: 'Medical Clinic3', url: 'icons/icon3.png' },
+            { name: 'Medical Clinic4', url: 'icons/icon4.png' },
+        ]
+
+
+        mapboxgl.accessToken = 'pk.eyJ1Ijoic2Vyc2Vyc2VyIiwiYSI6ImNrZnBpaWF5azBpMWMyeHBmdzJpdno1NzgifQ.4vBDF2DNuk-beXljllf3Yg';
+        var map = (window.map = new mapboxgl.Map({
+            container: 'map',
+            zoom: 3,
+            center: [-114, 51],
+            style: 'mapbox://styles/mapbox/light-v10',
+            antialias: true // create the gl context with MSAA antialiasing, so custom layers are antialiased
+        }));
+
+        // var map = new mapboxgl.Map({
+        //     container: 'map', // container id
+        //     style: {
+        //         "version": 8,
+        //         "sources": {
+        //             "simple-tiles": {
+        //                 "type": "raster",
+        //                 "tiles": ["https://a.tile.openstreetmap.org/{z}/{x}/{y}.png", "https://b.tile.openstreetmap.org/{z}/{x}/{y}.png"],
+        //                 "tileSize": 256
+        //             },
+        //         },
+        //         "layers": [{
+        //             "id": "simple-tiles",
+        //             "type": "raster",
+        //             "source": "simple-tiles",
+        //             "minzoom": 0,
+        //             "maxzoom": 22
+        //         },
+        //         ]
+        //     },
+        //     center: { lng: 2.8069385635741355, lat: 45.55674438682405 },
+        //     zoom: 3.5 // starting zoom
+        // });
+        map.addControl(new mapboxgl.NavigationControl());
+
+        let counter = 0;
+
+
+        map.on('load', function () {
+
+            icons.forEach(i => {
+                console.log('i', i);
+                const checkIcon = new Image(22, 32);
+                checkIcon.onload = () => map.addImage(i.name, checkIcon)
+                checkIcon.src = i.url;
+            })
+
+            d3.csv('https://docs.google.com/spreadsheets/d/1u9FkZvT9NbKlLFgEg1sW9nkz_i--9gXbTDZ1P1hWRns/gviz/tq?tqx=out:csv&').then(data => {
+                ready(data)
+            })
+
+            map.addSource('pins', {
+                "type": "geojson",
+                "data": {
+                    "type": "FeatureCollection",
+                    "features": []
+                }
+            });
+            map.addLayer({
+                'id': 'icon',
+                'source': 'pins',
+                'type': 'symbol',
+                'layout': {
+                    'icon-image': ['get', 'icon'],
+                    'icon-rotation-alignment': 'map',
+                    'icon-allow-overlap': true,
+                    'icon-ignore-placement': true
+                }
+            });
+
+            map.on('click', 'icon', function (e) {
+                var coordinates = e.features[0].geometry.coordinates.slice();
+                var info = e.features[0].properties;
+
+                while (Math.abs(e.lngLat.lng - coordinates[0]) > 180) {
+                    coordinates[0] += e.lngLat.lng > coordinates[0] ? 360 : -360;
+                }
+                // const text = Object.entries(description).map(i => {
+                //     return i[0] + ': ' + i[1];
+                // }).join("<br>")
+                let { name, category, description, tel, site, google } = info
+                if (tel === 'null') {
+                    tel = '';
+                }
+                const text = `
+                    <h2>${name}</h2>
+                    <h3 style="color:gray">${category}</h3>
+                    <div class="descr">${description}</div>
+                    `
+                    // <div><b>${tel}</b></div>
+                    // <div><a href="${site}" target="_blank">Web site</a></div>
+                    // <div><a href="${google}" target="_blank">Google</a></div>
+                    new mapboxgl.Popup()
+                    .setLngLat(coordinates)
+                    .setHTML(text)
+                    .addTo(map);
+            });
+            map.on('mouseenter', 'icon', function () {
+                map.getCanvas().style.cursor = 'pointer';
+            });
+            map.on('mouseleave', 'icon', function () {
+                map.getCanvas().style.cursor = '';
+            });
+            mapReady = true;
+
+            // map.on("zoom", () => {
+            //     console.log('zoom', map.getZoom());
+            //     zoom.innerHTML = map.getZoom()
+            // })
+
+
+        });
+
+
+        function ready(data) {
+
+            //buildCategories(categories, data)
+
+            console.log('data', data);
+
+            const pinsData = data;
+            let bounds = new mapboxgl.LngLatBounds();
+            const pins = pinsData.filter(i => i.lat && i.lng).map(i => {
+
+                const latlng = [+i.lng, +i.lat];
+                bounds.extend(latlng)
+                return turf.point(latlng, { ...i, icon: i.category });
+
+            })
+
+            const collection = turf.featureCollection(pins)
+            map.getSource("pins").setData(collection)
+            map.fitBounds(bounds, { padding: 100, maxZoom: 15 })
+        }
+
+        document.addEventListener("click", (e) => {
+            console.log('e.target', e.target);
+            const el = e.target;
+            if (el.classList.contains("accordion")) {
+                el.classList.toggle("active");
+                var panel = el.nextElementSibling;
+                if (panel.style.maxHeight) {
+                    panel.style.maxHeight = null;
+                } else {
+                    panel.style.maxHeight = panel.scrollHeight + "px";
+                }
+            }
+            if (el.classList.contains("item")) {
+                const coords = el.getAttribute("coords").split(",");
+                console.log('coords', coords);
+                map.flyTo({
+                    center: [coords[1], coords[0]],
+                    zoom: 13
+                })
+            }
+            if (el.classList.contains("select")) {
+                console.log('111111111', 111111111);
+
+                const selectedFilter = Array.from(document.querySelectorAll(".select:checked")).map(i => i.id)
+                console.log('selectedFilter', selectedFilter);
+
+                const c = [...new Set(categories)]
+                const filters = c.map((i, key) => {
+                    return {
+                        name: i,
+                        visible: true
+                    }
+                })
+
+                filters.forEach(i => {
+                    console.log('i', i);
+                    if (selectedFilter.includes(i.name)) {
+                        i.visible = true;
+                    } else {
+                        i.visible = false;
+                    }
+                });
+
+                console.log('filters', filters);
+                const filter = filters.filter(i => i.visible).map(i => i.name)
+                map.setFilter('icon', [
+                    'match',
+                    ['get', 'category'],
+                    filter.length > 0 ? filter : "",
+                    true,
+                    false
+                ]);
+            }
+        })
+
+        function buildCategories(cat, data) {
+
+            const c = [...new Set(cat)]
+            console.log('c', c);
+            const filters = c.map((i, key) => {
+                return {
+                    name: i,
+                    visible: true
+                }
+            })
+
+            //---------------- accordion part ------------------
+            let catName = '';
+            let aText = '';
+            data.map(i => {
+                if (catName !== i.category) {
+                    aText += `<button class="accordion">${i.category}</button>`;
+
+                    catName = i.category;
+                    const d = data.filter(s => s.category === catName).map(d => `<div class="item" coords="${d.coords}">${d.name}</div>`).join("");
+                    aText += `<div class="panel">
+                            <div style="margin:20px;">
+                                <input type="checkbox" checked id="${i.category}" class="select"><label for="${i.category}">Select all</label>
+                            </div>
+                            ${d}
+                        </div>`
+                }
+            })
+            accrd.innerHTML = aText;
+            //---------------- accordion part ------------------
+        }
+    </script>
+
+    <script>
+
+        function initMap() {
+
+            var input = document.getElementById('pac-input');
+            var autocomplete = new google.maps.places.Autocomplete(input);
+            // autocomplete.bindTo('bounds', map);
+            autocomplete.addListener('place_changed', function () {
+
+
+                var place = autocomplete.getPlace();
+                if (!place.geometry) {
+                    // User entered the name of a Place that was not suggested and
+                    // pressed the Enter key, or the Place Details request failed.
+                    window.alert("No details available for input: '" + place.name + "'");
+                    return;
+                }
+                console.log('place', place);
+                // If the place has a geometry, then present it on a map.
+                if (place.geometry.viewport) {
+                    console.log('place.geometry.viewport', place.geometry.viewport);
+                    map.flyTo({
+                        center: place.geometry.location.toJSON(),
+                        zoom: 14.2
+                    })
+
+                } else {
+                    console.log('place.geometry.location', place.geometry.location);
+                    map.flyTo({
+                        center: place.geometry.location.toJSON(),
+                        zoom: 15
+                    })
+                }
+
+            });
+
+
+        }
+
+
+
+    </script>
+
+</body>
+
+</html>
