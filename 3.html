@@ -150,8 +150,8 @@
                 checkIcon.onload = () => map.addImage(i.name, checkIcon)
                 checkIcon.src = i.url;
             })
-
-            d3.csv('https://docs.google.com/spreadsheets/d/1u9FkZvT9NbKlLFgEg1sW9nkz_i--9gXbTDZ1P1hWRns/gviz/tq?tqx=out:csv&').then(data => {
+                    
+            d3.csv('https://docs.google.com/spreadsheets/d/e/2PACX-1vSwC7zLB5g1W-mBZMHAUyWU3Dg7IaxEQkSgeFfISO8jdQlcCBXsOos3F6ZEy5HlMMXCsmEC6iUam9Zr/pub?output=csv').then(data => {
                 ready(data)
             })
 
